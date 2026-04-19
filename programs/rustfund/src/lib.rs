@@ -46,8 +46,13 @@ pub mod rustfund {
             },
         );
         system_program::transfer(cpi_context, amount)?;
+
+        contribution.amount = contribution.amount.checked_add(amount)
+        .ok_or(ErrorCode::CalculationOverflow)?;
         
-       fund.amount_raised += amount;
+        fund.amount_raised = fund.amount_raised.checked_add(amount)
+        .ok_or(ErrorCode::CalculationOverflow)?;
+    
         Ok(())
     }
     
