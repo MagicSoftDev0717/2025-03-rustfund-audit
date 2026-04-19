@@ -25,6 +25,8 @@ pub mod rustfund {
     pub fn contribute(ctx: Context<FundContribute>, amount: u64) -> Result<()> {
         let fund = &mut ctx.accounts.fund;
         let contribution = &mut ctx.accounts.contribution;
+
+        require!(amount > 0, ErrorCode::InvalidContributionAmount);
         
         if fund.deadline != 0 && fund.deadline < Clock::get().unwrap().unix_timestamp.try_into().unwrap() {
             return Err(ErrorCode::DeadlineReached.into());
@@ -52,7 +54,7 @@ pub mod rustfund {
         
         fund.amount_raised = fund.amount_raised.checked_add(amount)
         .ok_or(ErrorCode::CalculationOverflow)?;
-    
+
         Ok(())
     }
     
@@ -209,5 +211,7 @@ pub enum ErrorCode {
     UnauthorizedAccess,
     #[msg("Calculation overflow occurred")]
     CalculationOverflow,
+    #[msg("Contribution amount invalid")]
+    InvalidContributionAmount,
 }
 
