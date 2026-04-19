@@ -118,7 +118,7 @@ pub struct FundCreate<'info> {
 
 #[derive(Accounts)]
 pub struct FundContribute<'info> {
-    #[account(mut)]
+    #[account(mut, seeds= [fund.name.as_bytes(), fund.creator.as_ref()], bump, has_one = creator)]
     pub fund: Account<'info, Fund>,
     #[account(mut)]
     pub contributor: Signer<'info>,
