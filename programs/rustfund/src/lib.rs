@@ -61,11 +61,17 @@ pub mod rustfund {
 
     pub fn set_deadline(ctx: Context<FundSetDeadline>, deadline: u64) -> Result<()> {
         let fund = &mut ctx.accounts.fund;
-        if fund.dealine_set {
-            return Err(ErrorCode::DeadlineAlreadySet.into());
-        }
+        // if fund.dealine_set {
+        //     return Err(ErrorCode::DeadlineAlreadySet.into());
+        // }
+
+         let now = Clock::get()?.unix_timestamp as u64;
+
+        require!(!fund.dealine_set, ErrorCode::DeadlineAlreadySet);
+        require!(deadline > now, ErrorCode::InvalidDeadline);
         
         fund.deadline = deadline;
+        fund.dealine_set = true;
         Ok(())
     }
 
@@ -213,5 +219,7 @@ pub enum ErrorCode {
     CalculationOverflow,
     #[msg("Contribution amount invalid")]
     InvalidContributionAmount,
+    #[msg("Invalid deadline")]
+    InvalidDeadline,
 }
 
