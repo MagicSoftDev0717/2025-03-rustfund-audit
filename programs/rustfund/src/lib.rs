@@ -10,6 +10,10 @@ pub mod rustfund {
     use super::*;
 
     pub fn fund_create(ctx: Context<FundCreate>, name: String, description: String, goal: u64) -> Result<()> {
+        require!(!name.trim().is_empty(), ErrorCode::InvalidName);
+        require!(!description.trim().is_empty(), ErrorCode::InvalidDescription);
+        require!(goal > 0, ErrorCode::InvalidGoal);
+
         let fund = &mut ctx.accounts.fund;
         fund.name = name;
         fund.description = description;
@@ -27,14 +31,13 @@ pub mod rustfund {
     pub fn contribute(ctx: Context<FundContribute>, amount: u64) -> Result<()> {
         let fund = &mut ctx.accounts.fund;
         let contribution = &mut ctx.accounts.contribution;
-
-        require!(amount > 0, ErrorCode::InvalidContributionAmount);
+        let now = Clock::get()?.unix_timestamp as u64;
         
         // if fund.deadline != 0 && fund.deadline < Clock::get().unwrap().unix_timestamp.try_into().unwrap() {
         //     return Err(ErrorCode::DeadlineReached.into());
         // }
         
-        let now = Clock::get()?.unix_timestamp as u64;
+        require!(amount > 0, ErrorCode::InvalidContributionAmount);
         require!(fund.deadline == 0 || fund.deadline > now, ErrorCode::DeadlineReached);
 
     
@@ -142,7 +145,11 @@ pub mod rustfund {
 #[derive(Accounts)]
 #[instruction(name: String)]
 pub struct FundCreate<'info> {
-    #[account(init, payer = creator, space = 8 + Fund::INIT_SPACE,seeds = [name.as_bytes(),creator.key().as_ref()], bump)]
+    #[account(init, payer = creator, 
+        space = 8 + Fund::INIT_SPACE,
+        seeds = [name.as_bytes(),creator.key().as_ref()], 
+        bump
+    )]
     pub fund: Account<'info, Fund>,
     #[account(mut)]
     pub creator: Signer<'info>,
@@ -169,7 +176,10 @@ pub struct FundContribute<'info> {
 
 #[derive(Accounts)]
 pub struct FundSetDeadline<'info> {
-    #[account(mut,has_one = creator, seeds = [fund.name.as_bytes(), creator.key().as_ref()], bump)]
+    #[account(mut, seeds = [fund.name.as_bytes(), creator.key().as_ref()], 
+        bump,
+        has_one = creator
+    )]
     pub fund: Account<'info, Fund>,
     #[account(mut)]
     pub creator: Signer<'info>,
@@ -194,7 +204,10 @@ pub struct FundRefund<'info> {
 
 #[derive(Accounts)]
 pub struct FundWithdraw<'info> {
-    #[account(mut, seeds = [fund.name.as_bytes(), creator.key().as_ref()], bump,has_one = creator)]
+    #[account(mut, seeds = [fund.name.as_bytes(), creator.key().as_ref()], 
+        bump,
+        has_one = creator
+    )]
     pub fund: Account<'info, Fund>,
     #[account(mut)]
     pub creator: Signer<'info>,
@@ -229,6 +242,12 @@ pub struct Fund {
 
 #[error_code]
 pub enum ErrorCode {
+    #[msg("Invalid name")]
+    InvalidName,
+    #[msg("Invalid description")]
+    InvalidDescription,
+    #[msg("Invalid goal")]
+    InvalidGoal,
     #[msg("Deadline already set")]
     DeadlineAlreadySet,
     #[msg("Deadline reached")]
