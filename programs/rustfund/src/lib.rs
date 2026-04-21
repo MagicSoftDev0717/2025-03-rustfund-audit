@@ -18,6 +18,8 @@ pub mod rustfund {
         fund.creator = ctx.accounts.creator.key();
         fund.amount_raised = 0;
         fund.deadline_set = false;
+        fund.withdrawn = false;
+
         Ok(())
     }
 
@@ -69,7 +71,7 @@ pub mod rustfund {
         //     return Err(ErrorCode::DeadlineAlreadySet.into());
         // }
 
-         let now = Clock::get()?.unix_timestamp as u64;
+        let now = Clock::get()?.unix_timestamp as u64;
 
         require!(!fund.deadline_set, ErrorCode::DeadlineAlreadySet);
         require!(deadline > now, ErrorCode::InvalidDeadline);
@@ -82,13 +84,17 @@ pub mod rustfund {
 
     pub fn refund(ctx: Context<FundRefund>) -> Result<()> {
   
-        let amount = ctx.accounts.contribution.amount;
-        if ctx.accounts.fund.deadline != 0 && ctx.accounts.fund.deadline > Clock::get().unwrap().unix_timestamp.try_into().unwrap() {
-            return Err(ErrorCode::DeadlineNotReached.into());  
-        }
+        let fund = &mut ctx.accounts.fund;
+        let contribution = &mut ctx.accounts.contribution;
+        let amount = contribution.amount;
+        // if ctx.accounts.fund.deadline != 0 && ctx.accounts.fund.deadline > Clock::get().unwrap().unix_timestamp.try_into().unwrap() {
+        //     return Err(ErrorCode::DeadlineNotReached.into());  
+        // }
+        let now = Clock::get()?.unix_timestamp as u64;
+        require!(fund.deadline != 0 && fund.deadline <= now, ErrorCode::DeadlineNotReached);
     
-        **ctx.accounts.fund.to_account_info().try_borrow_mut_lamports()? = 
-        ctx.accounts.fund.to_account_info().lamports()
+        **fund.to_account_info().try_borrow_mut_lamports()? = 
+        fund.to_account_info().lamports()
         .checked_sub(amount)
         .ok_or(ProgramError::InsufficientFunds)?;
         
@@ -97,21 +103,26 @@ pub mod rustfund {
         .checked_add(amount)
         .ok_or(ErrorCode::CalculationOverflow)?;
 
-     ctx.accounts.fund.amount_raised = ctx.accounts.fund.amount_raised.checked_sub(amount)
+     fund.amount_raised = fund.amount_raised.checked_sub(amount)
         .ok_or(ErrorCode::CalculationOverflow)?;
 
 
         // Reset contribution amount after refund
-        ctx.accounts.contribution.amount = 0;
+        contribution.amount = 0;
         
         Ok(())
     }
 
     pub fn withdraw(ctx: Context<FundWithdraw>) -> Result<()> {
         let amount = ctx.accounts.fund.amount_raised;
+        let fund = &mut ctx.accounts.fund;
+        let now = Clock::get()?.unix_timestamp as u64;
+
+        require!(fund.deadline != 0 && fund.deadline <= now, ErrorCode::DeadlineNotReached);
+        require!(!fund.withdrawn, ErrorCode::UnauthorizedAccess);
         
-        **ctx.accounts.fund.to_account_info().try_borrow_mut_lamports()? = 
-            ctx.accounts.fund.to_account_info().lamports()
+        **fund.to_account_info().try_borrow_mut_lamports()? = 
+            fund.to_account_info().lamports()
             .checked_sub(amount)
             .ok_or(ProgramError::InsufficientFunds)?;
             
@@ -119,6 +130,9 @@ pub mod rustfund {
             ctx.accounts.creator.to_account_info().lamports()
             .checked_add(amount)
             .ok_or(ErrorCode::CalculationOverflow)?;
+
+        fund.amount_raised = 0;
+        fund.withdrawn = true;
             
     
         Ok(())
@@ -208,6 +222,7 @@ pub struct Fund {
     pub creator: Pubkey,
     pub amount_raised: u64,
     pub deadline_set: bool,
+    pub withdrawn: bool,
 }
 
 
