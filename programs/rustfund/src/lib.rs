@@ -17,7 +17,7 @@ pub mod rustfund {
         fund.deadline = 0;
         fund.creator = ctx.accounts.creator.key();
         fund.amount_raised = 0;
-        fund.dealine_set = false;
+        fund.deadline_set = false;
         Ok(())
     }
 
@@ -28,9 +28,13 @@ pub mod rustfund {
 
         require!(amount > 0, ErrorCode::InvalidContributionAmount);
         
-        if fund.deadline != 0 && fund.deadline < Clock::get().unwrap().unix_timestamp.try_into().unwrap() {
-            return Err(ErrorCode::DeadlineReached.into());
-        }
+        // if fund.deadline != 0 && fund.deadline < Clock::get().unwrap().unix_timestamp.try_into().unwrap() {
+        //     return Err(ErrorCode::DeadlineReached.into());
+        // }
+        
+        let now = Clock::get()?.unix_timestamp as u64;
+        require!(fund.deadline == 0 || fund.deadline > now, ErrorCode::DeadlineReached);
+
     
         // Initialize or update contribution record
         if contribution.contributor == Pubkey::default() {
@@ -61,17 +65,17 @@ pub mod rustfund {
 
     pub fn set_deadline(ctx: Context<FundSetDeadline>, deadline: u64) -> Result<()> {
         let fund = &mut ctx.accounts.fund;
-        // if fund.dealine_set {
+        // if fund.deadline_set {
         //     return Err(ErrorCode::DeadlineAlreadySet.into());
         // }
 
          let now = Clock::get()?.unix_timestamp as u64;
 
-        require!(!fund.dealine_set, ErrorCode::DeadlineAlreadySet);
+        require!(!fund.deadline_set, ErrorCode::DeadlineAlreadySet);
         require!(deadline > now, ErrorCode::InvalidDeadline);
         
         fund.deadline = deadline;
-        fund.dealine_set = true;
+        fund.deadline_set = true;
         Ok(())
     }
 
@@ -91,6 +95,9 @@ pub mod rustfund {
     **ctx.accounts.contributor.to_account_info().try_borrow_mut_lamports()? = 
         ctx.accounts.contributor.to_account_info().lamports()
         .checked_add(amount)
+        .ok_or(ErrorCode::CalculationOverflow)?;
+
+     ctx.accounts.fund.amount_raised = ctx.accounts.fund.amount_raised.checked_sub(amount)
         .ok_or(ErrorCode::CalculationOverflow)?;
 
 
@@ -131,7 +138,7 @@ pub struct FundCreate<'info> {
 
 #[derive(Accounts)]
 pub struct FundContribute<'info> {
-    #[account(mut, seeds= [fund.name.as_bytes(), fund.creator.as_ref()], bump, has_one = creator)]
+    #[account(mut, seeds= [fund.name.as_bytes(), fund.creator.as_ref()], bump)]
     pub fund: Account<'info, Fund>,
     #[account(mut)]
     pub contributor: Signer<'info>,
@@ -148,7 +155,7 @@ pub struct FundContribute<'info> {
 
 #[derive(Accounts)]
 pub struct FundSetDeadline<'info> {
-    #[account(mut,has_one = creator)]
+    #[account(mut,has_one = creator, seeds = [fund.name.as_bytes(), creator.key().as_ref()], bump)]
     pub fund: Account<'info, Fund>,
     #[account(mut)]
     pub creator: Signer<'info>,
@@ -200,7 +207,7 @@ pub struct Fund {
     pub deadline: u64,
     pub creator: Pubkey,
     pub amount_raised: u64,
-    pub dealine_set: bool,
+    pub deadline_set: bool,
 }
 
 
